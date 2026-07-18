@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A transparent OpenRouter proxy that adds prompt-caching breakpoints and forwards your request.">
+  <title>OpenRouter Cache Proxy</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #090b10;
+      --surface: #10131a;
+      --surface-raised: #151922;
+      --text: #f5f7fb;
+      --muted: #9ca5b7;
+      --border: #252b37;
+      --accent: #8cf2c5;
+      --accent-dim: #163c31;
+      --blue: #91b8ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 1.25rem;
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 0%, rgb(77 112 100 / 18%), transparent 30rem),
+        radial-gradient(circle at 90% 100%, rgb(74 96 145 / 14%), transparent 26rem),
+        var(--background);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a { color: inherit; }
+
+    main {
+      width: min(100%, 620px);
+      padding: clamp(1.5rem, 4vw, 2.25rem);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgb(0 0 0 / 35%);
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.1rem;
+    }
+
+    h1 {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 750;
+      letter-spacing: -.02em;
+    }
+
+    h1::before {
+      width: .6rem;
+      height: .6rem;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 0 4px rgb(140 242 197 / 10%), 0 0 18px rgb(140 242 197 / 45%);
+      content: "";
+    }
+
+    .github-link {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .4rem .7rem;
+      color: var(--muted);
+      background: rgb(255 255 255 / 2%);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      font-size: .8rem;
+      font-weight: 650;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 150ms ease, border-color 150ms ease;
+    }
+
+    .github-link:hover,
+    .github-link:focus-visible { color: var(--text); border-color: #3d4657; }
+
+    .github-link svg { width: .95rem; height: .95rem; flex: 0 0 auto; }
+
+    .lede {
+      margin: 0 0 1.1rem;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .lede strong { color: var(--text); font-weight: 650; }
+
+    .lede code,
+    .checks code {
+      padding: .08em .35em;
+      color: var(--accent);
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font: 600 .85em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .endpoint {
+      display: block;
+      margin-bottom: 1.1rem;
+      padding: .75rem .9rem;
+      overflow-wrap: anywhere;
+      color: var(--blue);
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font: 600 .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      user-select: all;
+    }
+
+    .checks {
+      display: grid;
+      gap: .45rem;
+      margin: 0 0 1.1rem;
+      padding: 0;
+      list-style: none;
+      color: #dce2eb;
+      font-size: .86rem;
+    }
+
+    .checks li {
+      display: flex;
+      align-items: baseline;
+      gap: .55rem;
+    }
+
+    .checks li::before {
+      color: var(--accent);
+      content: "✓";
+      font-weight: 900;
+    }
+
+    footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: .35rem 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      color: #737d90;
+      font-size: .78rem;
+    }
+
+    .top > *,
+    .checks li,
+    footer > * { min-width: 0; }
+
+    footer a,
+    .lede code,
+    .checks code { overflow-wrap: anywhere; }
+
+    footer a:hover,
+    footer a:focus-visible { color: var(--text); }
+
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    @media (max-width: 27rem) {
+      body { padding: .75rem; }
+
+      main { padding: 1.25rem; }
+
+      .top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .75rem;
+      }
+
+      .github-link {
+        min-height: 44px;
+        padding-inline: .85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top">
+      <h1>OpenRouter Cache Proxy</h1>
+      <a class="github-link" href="https://github.com/norenaboi/cache-proxy" target="_blank" rel="noreferrer">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 .7A11.5 11.5 0 0 0 8.36 23.1c.58.1.79-.25.79-.56v-2.23c-3.24.7-3.92-1.38-3.92-1.38-.53-1.35-1.3-1.7-1.3-1.7-1.06-.73.08-.72.08-.72 1.17.08 1.79 1.2 1.79 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.75.4-1.27.74-1.56-2.59-.3-5.31-1.3-5.31-5.69 0-1.26.45-2.28 1.2-3.09-.12-.29-.52-1.47.11-3.05 0 0 .98-.31 3.16 1.18a10.96 10.96 0 0 1 5.75 0c2.18-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.76.11 3.05.75.81 1.2 1.83 1.2 3.09 0 4.4-2.73 5.39-5.33 5.68.42.36.8 1.07.8 2.17v3.22c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+        Source
+      </a>
+    </div>
+
+    <p class="lede">
+      Point your OpenAI-compatible client at the endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys.
+    </p>
+
+    <code class="endpoint">https://cache.norenaboi.com/v1/chat/completions</code>
+
+    <ul class="checks">
+      <li>Only modification: <code>cache_control</code> breakpoints on eligible messages</li>
+      <li>Streaming supported, responses relayed as-is</li>
+      <li>Model list at <a href="/v1/models"><code>/v1/models</code></a></li>
+    </ul>
+
+    <footer>
+      <span>Open source — verify exactly what runs.</span>
+      <a href="https://github.com/norenaboi/cache-proxy" target="_blank" rel="noreferrer">github.com/norenaboi/cache-proxy</a>
+    </footer>
+  </main>
+</body>
+</html>

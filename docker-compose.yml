@@ -1,0 +1,26 @@
+services:
+  cache-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cache-proxy
+    restart: unless-stopped
+    ports:
+      - "${CACHE_PROXY_PORT:-8787}:8787"
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8787"
+      - --cache-depth
+      - "${CACHE_DEPTH:-0}"
+      - --cache-breakpoints
+      - "${CACHE_BREAKPOINTS:-4}"
+      - --upstream-timeout
+      - "${UPSTREAM_TIMEOUT:-180}"
+      - --log-level
+      - "${LOG_LEVEL:-info}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
