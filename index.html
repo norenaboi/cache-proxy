@@ -37,6 +37,75 @@
 
     a { color: inherit; }
 
+    .stats-panel {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.25rem;
+      z-index: 1;
+      width: min(15rem, calc(100vw - 2.5rem));
+      padding: .8rem;
+      background: rgb(16 19 26 / 92%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 14px 40px rgb(0 0 0 / 28%);
+      backdrop-filter: blur(12px);
+    }
+
+    .stats-heading {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      margin-bottom: .6rem;
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .stats-heading::before {
+      width: .42rem;
+      height: .42rem;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgb(140 242 197 / 45%);
+      content: "";
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 0;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 0 .55rem;
+      border-left: 1px solid var(--border);
+    }
+
+    .stat:first-child { padding-left: 0; border-left: 0; }
+    .stat:last-child { padding-right: 0; }
+
+    .stat dt {
+      overflow: hidden;
+      color: #737d90;
+      font-size: .63rem;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stat dd {
+      margin: .18rem 0 0;
+      overflow: hidden;
+      color: var(--text);
+      font: 700 .88rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: -.03em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     main {
       width: min(100%, 620px);
       padding: clamp(1.5rem, 4vw, 2.25rem);
@@ -102,8 +171,7 @@
 
     .lede strong { color: var(--text); font-weight: 650; }
 
-    .lede code,
-    .checks code {
+    .lede code {
       padding: .08em .35em;
       color: var(--accent);
       background: var(--surface-raised);
@@ -125,7 +193,14 @@
       user-select: all;
     }
 
-    .checks {
+    .warning-heading {
+      margin: 0 0 .55rem;
+      color: #f4c76b;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+
+    .warnings {
       display: grid;
       gap: .45rem;
       margin: 0 0 1.1rem;
@@ -135,15 +210,15 @@
       font-size: .86rem;
     }
 
-    .checks li {
+    .warnings li {
       display: flex;
       align-items: baseline;
       gap: .55rem;
     }
 
-    .checks li::before {
-      color: var(--accent);
-      content: "✓";
+    .warnings li::before {
+      color: #f4c76b;
+      content: "⚠";
       font-weight: 900;
     }
 
@@ -159,20 +234,29 @@
     }
 
     .top > *,
-    .checks li,
+    .warnings li,
     footer > * { min-width: 0; }
 
     footer a,
-    .lede code,
-    .checks code { overflow-wrap: anywhere; }
+    .lede code { overflow-wrap: anywhere; }
 
     footer a:hover,
     footer a:focus-visible { color: var(--text); }
 
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
+    @media (max-width: 68rem) {
+      body { padding-top: 6.75rem; }
+    }
+
     @media (max-width: 27rem) {
-      body { padding: .75rem; }
+      body { padding: 6.5rem .75rem .75rem; }
+
+      .stats-panel {
+        top: .75rem;
+        right: .75rem;
+        width: calc(100vw - 1.5rem);
+      }
 
       main { padding: 1.25rem; }
 
@@ -190,6 +274,24 @@
   </style>
 </head>
 <body>
+  <aside class="stats-panel" aria-label="Proxy statistics">
+    <div class="stats-heading">Live cache stats</div>
+    <dl class="stats-grid">
+      <div class="stat">
+        <dt>Requests</dt>
+        <dd id="requests">—</dd>
+      </div>
+      <div class="stat">
+        <dt>Cache reads</dt>
+        <dd id="cacheReadRequests">—</dd>
+      </div>
+      <div class="stat">
+        <dt>Read tokens</dt>
+        <dd id="cacheReadTokens">—</dd>
+      </div>
+    </dl>
+  </aside>
+
   <main>
     <div class="top">
       <h1>OpenRouter Cache Proxy</h1>
@@ -205,10 +307,11 @@
 
     <code class="endpoint">https://cache.norenaboi.com/v1/chat/completions</code>
 
-    <ul class="checks">
-      <li>Only modification: <code>cache_control</code> breakpoints on eligible messages</li>
-      <li>Streaming supported, responses relayed as-is</li>
-      <li>Model list at <a href="/v1/models"><code>/v1/models</code></a></li>
+    <p class="warning-heading">You need to keep the prompt stable, this means:</p>
+    <ul class="warnings">
+      <li>No lorebooks.</li>
+      <li>No prefills.</li>
+      <li>Max context set to 0.</li>
     </ul>
 
     <footer>
@@ -216,5 +319,25 @@
       <a href="https://github.com/norenaboi/cache-proxy" target="_blank" rel="noreferrer">github.com/norenaboi/cache-proxy</a>
     </footer>
   </main>
+
+  <script>
+    const integerFormat = new Intl.NumberFormat();
+
+    async function refreshStats() {
+      try {
+        const response = await fetch("/stats", { cache: "no-store" });
+        if (!response.ok) return;
+        const stats = await response.json();
+        document.getElementById("requests").textContent = integerFormat.format(stats.requests);
+        document.getElementById("cacheReadRequests").textContent = integerFormat.format(stats.cache_read_requests);
+        document.getElementById("cacheReadTokens").textContent = integerFormat.format(stats.cache_read_tokens);
+      } catch {
+        // Keep the last successful values when a refresh fails.
+      }
+    }
+
+    refreshStats();
+    setInterval(refreshStats, 10000);
+  </script>
 </body>
 </html>

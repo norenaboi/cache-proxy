@@ -2,23 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
+import os
+import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import httpx
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 HOME_PAGE_PATH = Path(__file__).with_name("index.html")
 CACHE_CONTROL = {"type": "ephemeral"}
+STATS_FIELDS = ("requests", "cache_read_requests", "cache_read_tokens")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -26,6 +33,137 @@ class Settings:
     cache_depth: int = 0
     cache_breakpoints: int = 4
     upstream_timeout: float = 180.0
+    stats_file: Path | None = None
+
+
+@dataclass
+class Stats:
+    requests: int = 0
+    cache_read_requests: int = 0
+    cache_read_tokens: int = 0
+    state_file: Path | None = field(default=None, repr=False)
+    _lock: Lock = field(default_factory=Lock, repr=False)
+
+    @classmethod
+    def load(cls, state_file: Path | None) -> Stats:
+        if state_file is None:
+            return cls()
+
+        try:
+            payload = json.loads(state_file.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or set(payload) != set(STATS_FIELDS):
+                raise ValueError("state must contain exactly the stats counters")
+            if any(
+                isinstance(payload[field], bool)
+                or not isinstance(payload[field], int)
+                or payload[field] < 0
+                for field in STATS_FIELDS
+            ):
+                raise ValueError("stats counters must be non-negative integers")
+        except FileNotFoundError:
+            return cls(state_file=state_file)
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+            logger.warning("Unable to load stats from %s: %s", state_file, error)
+            return cls(state_file=state_file)
+
+        return cls(
+            requests=payload["requests"],
+            cache_read_requests=payload["cache_read_requests"],
+            cache_read_tokens=payload["cache_read_tokens"],
+            state_file=state_file,
+        )
+
+    def _state(self) -> dict[str, int]:
+        return {
+            "requests": self.requests,
+            "cache_read_requests": self.cache_read_requests,
+            "cache_read_tokens": self.cache_read_tokens,
+        }
+
+    def _persist(self) -> None:
+        if self.state_file is None:
+            return
+
+        temporary_path: Path | None = None
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, name = tempfile.mkstemp(
+                dir=self.state_file.parent,
+                prefix=f".{self.state_file.name}.",
+                suffix=".tmp",
+            )
+            temporary_path = Path(name)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as temporary_file:
+                json.dump(self._state(), temporary_file, separators=(",", ":"))
+                temporary_file.write("\n")
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_path, self.state_file)
+        except (OSError, TypeError, ValueError) as error:
+            logger.warning("Unable to persist stats to %s: %s", self.state_file, error)
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def record_request(self) -> None:
+        with self._lock:
+            self.requests += 1
+            self._persist()
+
+    def record_usage(self, usage: Any) -> None:
+        cache_read_tokens = _cache_read_tokens(usage)
+        if cache_read_tokens <= 0:
+            return
+        with self._lock:
+            self.cache_read_requests += 1
+            self.cache_read_tokens += cache_read_tokens
+            self._persist()
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return self._state()
+
+
+def _cache_read_tokens(usage: Any) -> int:
+    if not isinstance(usage, dict):
+        return 0
+
+    details = usage.get("prompt_tokens_details")
+    candidates = [
+        usage.get("cache_read_input_tokens"),
+        usage.get("cached_tokens"),
+        details.get("cached_tokens") if isinstance(details, dict) else None,
+    ]
+    for value in candidates:
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+    return 0
+
+
+def _usage_from_json(content: bytes) -> Any:
+    try:
+        payload = json.loads(content)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return payload.get("usage") if isinstance(payload, dict) else None
+
+
+def _usage_from_sse_event(event: bytes) -> Any:
+    for line in event.splitlines():
+        if not line.startswith(b"data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == b"[DONE]":
+            continue
+        try:
+            payload = json.loads(data)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("usage"), dict):
+            return payload["usage"]
+    return None
 
 
 def _javascript_round(value: float) -> int:
@@ -139,6 +277,7 @@ def create_app(
         )
         async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
             app.state.client = client
+            app.state.stats = Stats.load(configured.stats_file)
             models_response = await client.get(
                 OPENROUTER_MODELS_URL,
                 headers={"Accept": "application/json"},
@@ -148,6 +287,13 @@ def create_app(
             yield
 
     app = FastAPI(title="OpenRouter Cache Proxy", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
 
     @app.get("/", response_class=FileResponse)
     async def home() -> FileResponse:
@@ -156,6 +302,10 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/stats")
+    async def stats(request: Request) -> dict[str, int | float]:
+        return request.app.state.stats.snapshot()
 
     @app.get("/v1/models")
     async def models(request: Request) -> Response:
@@ -192,6 +342,8 @@ def create_app(
 
         headers = _upstream_headers(authorization, request.headers.get("accept"))
         client: httpx.AsyncClient = request.app.state.client
+        stats: Stats = request.app.state.stats
+        stats.record_request()
 
         if body.get("stream") is True:
             upstream_request = client.build_request(
@@ -205,9 +357,19 @@ def create_app(
                 return _gateway_error(502, "Unable to connect to OpenRouter.")
 
             async def relay() -> AsyncIterator[bytes]:
+                buffer = b""
+                latest_usage = None
                 try:
                     async for chunk in upstream.aiter_raw():
+                        buffer += chunk
+                        while b"\n\n" in buffer:
+                            event, buffer = buffer.split(b"\n\n", 1)
+                            usage = _usage_from_sse_event(event)
+                            if usage is not None:
+                                latest_usage = usage
                         yield chunk
+                    trailing_usage = _usage_from_sse_event(buffer)
+                    stats.record_usage(trailing_usage or latest_usage)
                 finally:
                     await upstream.aclose()
 
@@ -226,6 +388,7 @@ def create_app(
         except httpx.RequestError:
             return _gateway_error(502, "Unable to connect to OpenRouter.")
 
+        stats.record_usage(_usage_from_json(upstream.content))
         return Response(
             content=upstream.content,
             status_code=upstream.status_code,
@@ -285,6 +448,12 @@ def parse_args() -> argparse.Namespace:
         "--upstream-timeout", type=_positive_float, default=180.0, metavar="SECONDS"
     )
     parser.add_argument(
+        "--stats-file",
+        type=Path,
+        default=Path("stats.json"),
+        help="persistent counter state file (default: stats.json)",
+    )
+    parser.add_argument(
         "--log-level",
         choices=("critical", "error", "warning", "info", "debug", "trace"),
         default="info",
@@ -299,6 +468,7 @@ def main() -> None:
             cache_depth=args.cache_depth,
             cache_breakpoints=args.cache_breakpoints,
             upstream_timeout=args.upstream_timeout,
+            stats_file=args.stats_file,
         )
     )
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)

@@ -18,9 +18,16 @@ services:
       - "${CACHE_BREAKPOINTS:-4}"
       - --upstream-timeout
       - "${UPSTREAM_TIMEOUT:-180}"
+      - --stats-file
+      - "${STATS_FILE:-/data/stats.json}"
       - --log-level
       - "${LOG_LEVEL:-info}"
+    volumes:
+      - cache-proxy-data:/data
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+volumes:
+  cache-proxy-data:

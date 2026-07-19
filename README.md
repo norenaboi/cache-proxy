@@ -28,6 +28,7 @@ The default address is `http://127.0.0.1:8787`. Available settings:
 - `--cache-depth`: `-1` disables markers, `0` includes all messages, and `N` excludes the last `N` messages (default `0`)
 - `--cache-breakpoints`: evenly distributed explicit breakpoint count from 1 to 4 (default `4`)
 - `--upstream-timeout`: OpenRouter timeout in seconds (default `180`)
+- `--stats-file`: persistent counter state file (default `stats.json`)
 - `--log-level`: Uvicorn log level (default `info`)
 
 Anthropic/OpenRouter supports at most four explicit cache breakpoints. Selected string messages are converted into text blocks; selected block-array messages receive `cache_control: {"type": "ephemeral"}` on their final block.
@@ -48,6 +49,7 @@ The service is available on `http://127.0.0.1:8787` by default. Compose settings
 - `CACHE_DEPTH` (default `0`)
 - `CACHE_BREAKPOINTS` (default `4`)
 - `UPSTREAM_TIMEOUT` (default `180`)
+- `STATS_FILE` (default `/data/stats.json`)
 - `LOG_LEVEL` (default `info`)
 
 Stop it with:
@@ -98,6 +100,8 @@ The proxy fetches OpenRouter's public model catalog once, without authorization,
 
 Startup fails if the initial OpenRouter model request cannot be completed successfully, ensuring a running instance always has a model catalog.
 
-A minimal usage page is available at `GET /`.
+A minimal usage page is available at `GET /`. It includes persistent counters for dispatched chat requests, requests with cache reads, and cache-read tokens. The same counters are available as JSON at `GET /stats`.
+
+Bare-metal runs store these counters in `stats.json` by default. Docker Compose stores them in `/data/stats.json` on the named `cache-proxy-data` volume, so they survive container restarts and recreation. `docker compose down -v` deletes that volume and resets the counters. A missing or invalid state file starts at zero; storage errors are logged without interrupting proxy requests. The JSON file is designed for one proxy process and should not be shared by multiple replicas.
 
 Health check: `GET /health`.
