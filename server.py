@@ -23,7 +23,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 HOME_PAGE_PATH = Path(__file__).with_name("index.html")
-CACHE_CONTROL = {"type": "ephemeral"}
+DEFAULT_CACHE_CONTROL = {"type": "ephemeral"}
+ONE_HOUR_CACHE_CONTROL = {"type": "ephemeral", "ttl": "1h"}
 STATS_FIELDS = ("requests", "cache_read_requests", "cache_read_tokens")
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ def _javascript_round(value: float) -> int:
     return math.floor(value + 0.5)
 
 
-def _add_cache_control(message: Any) -> Any:
+def _add_cache_control(message: Any, cache_control: dict[str, str]) -> Any:
     if not isinstance(message, dict) or not message.get("content"):
         return message
 
@@ -182,7 +183,7 @@ def _add_cache_control(message: Any) -> Any:
             {
                 "type": "text",
                 "text": content,
-                "cache_control": CACHE_CONTROL.copy(),
+                "cache_control": cache_control.copy(),
             }
         ]
         return updated
@@ -194,7 +195,7 @@ def _add_cache_control(message: Any) -> Any:
 
         updated = message.copy()
         blocks = content.copy()
-        blocks[-1] = {**final_block, "cache_control": CACHE_CONTROL.copy()}
+        blocks[-1] = {**final_block, "cache_control": cache_control.copy()}
         updated["content"] = blocks
         return updated
 
@@ -202,7 +203,10 @@ def _add_cache_control(message: Any) -> Any:
 
 
 def apply_prompt_caching(
-    messages: Any, cache_depth: int, cache_breakpoints: int
+    messages: Any,
+    cache_depth: int,
+    cache_breakpoints: int,
+    cache_control: dict[str, str] | None = None,
 ) -> Any:
     """Add evenly distributed OpenRouter cache breakpoints without mutating input."""
     if cache_depth == -1 or not isinstance(messages, list) or not messages:
@@ -219,8 +223,11 @@ def apply_prompt_caching(
         )
         breakpoint_indices.add(selected)
 
+    marker = cache_control or DEFAULT_CACHE_CONTROL
     return [
-        _add_cache_control(message) if index in breakpoint_indices else message
+        _add_cache_control(message, marker)
+        if index in breakpoint_indices
+        else message
         for index, message in enumerate(messages)
     ]
 
@@ -315,6 +322,7 @@ def create_app(
         )
 
     @app.post("/v1/chat/completions")
+    @app.post("/v2/chat/completions")
     async def chat_completions(request: Request) -> Response:
         authorization = _validate_bearer(request.headers.get("authorization"))
         if authorization is None:
@@ -334,10 +342,16 @@ def create_app(
 
         outgoing = deepcopy(body)
         if "messages" in outgoing:
+            cache_control = (
+                ONE_HOUR_CACHE_CONTROL
+                if request.url.path == "/v2/chat/completions"
+                else DEFAULT_CACHE_CONTROL
+            )
             outgoing["messages"] = apply_prompt_caching(
                 outgoing["messages"],
                 configured.cache_depth,
                 configured.cache_breakpoints,
+                cache_control,
             )
 
         headers = _upstream_headers(authorization, request.headers.get("accept"))

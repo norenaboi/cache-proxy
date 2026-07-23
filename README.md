@@ -1,6 +1,6 @@
 # OpenRouter cache proxy
 
-A small OpenAI-compatible Python proxy that adds explicit prompt-cache breakpoints and forwards requests to:
+A small OpenAI-compatible Python proxy that adds explicit Claude prompt-cache breakpoints and forwards requests to:
 
 `https://openrouter.ai/api/v1/chat/completions`
 
@@ -31,7 +31,12 @@ The default address is `http://127.0.0.1:8787`. Available settings:
 - `--stats-file`: persistent counter state file (default `stats.json`)
 - `--log-level`: Uvicorn log level (default `info`)
 
-Anthropic/OpenRouter supports at most four explicit cache breakpoints. Selected string messages are converted into text blocks; selected block-array messages receive `cache_control: {"type": "ephemeral"}` on their final block.
+Anthropic/OpenRouter supports at most four explicit cache breakpoints. Both chat routes use the same OpenAI-compatible request and response format and forward to OpenRouter:
+
+- `POST /v1/chat/completions` adds the default five-minute marker, `cache_control: {"type": "ephemeral"}`.
+- `POST /v2/chat/completions` adds Anthropic's explicit one-hour marker, `cache_control: {"type": "ephemeral", "ttl": "1h"}`.
+
+Selected string messages are converted into text blocks; selected block-array messages receive the route's `cache_control` marker on their final block. The one-hour TTL does not require an Anthropic beta header. It has a higher cache-write price than the default TTL and generally needs at least three uses of an unchanged prompt prefix to be cost-effective. Prompts below the selected Claude model's minimum cacheable prefix are processed normally but are not cached.
 
 ## Docker installation
 
@@ -64,6 +69,21 @@ Regular response:
 
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "anthropic/claude-sonnet-4",
+    "messages": [
+      {"role": "system", "content": "Reusable instructions"},
+      {"role": "user", "content": "Hello"}
+    ]
+  }'
+```
+
+One-hour prompt cache response (same request shape, longer cache TTL):
+
+```bash
+curl http://127.0.0.1:8787/v2/chat/completions \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

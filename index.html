@@ -180,9 +180,33 @@
       font: 600 .85em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
 
+    .endpoints {
+      display: grid;
+      gap: .65rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .endpoint-option {
+      display: grid;
+      gap: .35rem;
+    }
+
+    .endpoint-label {
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .endpoint-label strong {
+      color: var(--accent);
+      font-weight: 750;
+      text-transform: none;
+    }
+
     .endpoint {
       display: block;
-      margin-bottom: 1.1rem;
       padding: .75rem .9rem;
       overflow-wrap: anywhere;
       color: var(--blue);
@@ -302,10 +326,19 @@
     </div>
 
     <p class="lede">
-      Point your OpenAI-compatible client at the endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys.
+      Point your OpenAI-compatible client at either endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. Use <code>/v2</code> when a stable prompt should remain cached for one hour. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys.
     </p>
 
-    <code class="endpoint">https://cache.norenaboi.com/v1/chat/completions</code>
+    <div class="endpoints" aria-label="Chat completion endpoints">
+      <div class="endpoint-option">
+        <span class="endpoint-label">Default cache · approximately 5 minutes</span>
+        <code class="endpoint" data-endpoint-path="/v1/chat/completions">/v1/chat/completions</code>
+      </div>
+      <div class="endpoint-option">
+        <span class="endpoint-label"><strong>1-hour cache</strong> · best for repeated stable prompts</span>
+        <code class="endpoint" data-endpoint-path="/v2/chat/completions">/v2/chat/completions</code>
+      </div>
+    </div>
 
     <p class="warning-heading">You need to keep the prompt stable, this means:</p>
     <ul class="warnings">
@@ -322,6 +355,10 @@
 
   <script>
     const integerFormat = new Intl.NumberFormat();
+
+    for (const endpoint of document.querySelectorAll("[data-endpoint-path]")) {
+      endpoint.textContent = new URL(endpoint.dataset.endpointPath, window.location.origin).href;
+    }
 
     async function refreshStats() {
       try {
