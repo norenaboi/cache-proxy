@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
-COPY server.py index.html ./
+COPY server.py index.html favicon.ico ./
 
 ARG INSTALL_TEST_DEPS=false
 RUN if [ "$INSTALL_TEST_DEPS" = "true" ]; then pip install '.[test]'; else pip install .; fi \

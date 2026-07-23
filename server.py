@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 HOME_PAGE_PATH = Path(__file__).with_name("index.html")
+FAVICON_PATH = Path(__file__).with_name("favicon.ico")
 DEFAULT_CACHE_CONTROL = {"type": "ephemeral"}
 ONE_HOUR_CACHE_CONTROL = {"type": "ephemeral", "ttl": "1h"}
 STATS_FIELDS = ("requests", "cache_read_requests", "cache_read_tokens")
@@ -305,6 +306,10 @@ def create_app(
     @app.get("/", response_class=FileResponse)
     async def home() -> FileResponse:
         return FileResponse(HOME_PAGE_PATH, media_type="text/html")
+
+    @app.get("/favicon.ico", response_class=FileResponse)
+    async def favicon() -> FileResponse:
+        return FileResponse(FAVICON_PATH, media_type="image/x-icon")
 
     @app.get("/health")
     async def health() -> dict[str, str]:
