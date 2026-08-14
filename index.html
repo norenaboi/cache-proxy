@@ -43,7 +43,7 @@
       top: 1.25rem;
       right: 1.25rem;
       z-index: 1;
-      width: min(15rem, calc(100vw - 2.5rem));
+      width: min(30rem, calc(100vw - 2.5rem));
       padding: .8rem;
       background: rgb(16 19 26 / 92%);
       border: 1px solid var(--border);
@@ -75,13 +75,13 @@
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       margin: 0;
     }
 
     .stat {
       min-width: 0;
-      padding: 0 .55rem;
+      padding: 0 .65rem;
       border-left: 1px solid var(--border);
     }
 
@@ -89,21 +89,17 @@
     .stat:last-child { padding-right: 0; }
 
     .stat dt {
-      overflow: hidden;
       color: #737d90;
       font-size: .63rem;
       line-height: 1.2;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .stat dd {
       margin: .18rem 0 0;
-      overflow: hidden;
       color: var(--text);
-      font: 700 .88rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      letter-spacing: -.03em;
-      text-overflow: ellipsis;
+      font: 700 clamp(.72rem, 1.8vw, .88rem)/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: -.04em;
       white-space: nowrap;
     }
 
@@ -314,6 +310,10 @@
         <dt>Read tokens</dt>
         <dd id="cacheReadTokens">—</dd>
       </div>
+      <div class="stat">
+        <dt>Saved $</dt>
+        <dd id="savedDollars">—</dd>
+      </div>
     </dl>
   </aside>
 
@@ -356,6 +356,13 @@
 
   <script>
     const integerFormat = new Intl.NumberFormat();
+    const dollarFormat = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const CACHE_SAVINGS_PER_MILLION_TOKENS = 4.5;
 
     for (const endpoint of document.querySelectorAll("[data-endpoint-path]")) {
       endpoint.textContent = new URL(endpoint.dataset.endpointPath, window.location.origin).href;
@@ -369,6 +376,9 @@
         document.getElementById("requests").textContent = integerFormat.format(stats.requests);
         document.getElementById("cacheReadRequests").textContent = integerFormat.format(stats.cache_read_requests);
         document.getElementById("cacheReadTokens").textContent = integerFormat.format(stats.cache_read_tokens);
+        document.getElementById("savedDollars").textContent = dollarFormat.format(
+          stats.cache_read_tokens * CACHE_SAVINGS_PER_MILLION_TOKENS / 1_000_000,
+        );
       } catch {
         // Keep the last successful values when a refresh fails.
       }
