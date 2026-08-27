@@ -43,7 +43,6 @@
       top: 1.25rem;
       right: 1.25rem;
       z-index: 1;
-      width: min(30rem, calc(100vw - 2.5rem));
       padding: .8rem;
       background: rgb(16 19 26 / 92%);
       border: 1px solid var(--border);
@@ -75,7 +74,7 @@
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       margin: 0;
     }
 
@@ -276,7 +275,6 @@
       .stats-panel {
         top: .75rem;
         right: .75rem;
-        width: calc(100vw - 1.5rem);
       }
 
       main { padding: 1.25rem; }
@@ -307,11 +305,15 @@
         <dd id="cacheReadRequests">—</dd>
       </div>
       <div class="stat">
+        <dt>Cache %</dt>
+        <dd id="cachePercentage">—</dd>
+      </div>
+      <div class="stat">
         <dt>Read tokens</dt>
         <dd id="cacheReadTokens">—</dd>
       </div>
       <div class="stat">
-        <dt>Saved $</dt>
+        <dt>Saved</dt>
         <dd id="savedDollars">—</dd>
       </div>
     </dl>
@@ -327,16 +329,16 @@
     </div>
 
     <p class="lede">
-      Point your OpenAI-compatible client at either endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. Use <code>/v2</code> when a stable prompt should remain cached for one hour. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys.
+      Point your OpenAI-compatible client at either endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys, nothing (except token count for stats). This is just a passthrough proxy.
     </p>
 
     <div class="endpoints" aria-label="Chat completion endpoints">
       <div class="endpoint-option">
-        <span class="endpoint-label">Default cache · approximately 5 minutes</span>
+        <span class="endpoint-label"><strong>Default cache · 5 minutes</strong></span>
         <code class="endpoint" data-endpoint-path="/v1/chat/completions">/v1/chat/completions</code>
       </div>
       <div class="endpoint-option">
-        <span class="endpoint-label"><strong>1-hour cache</strong> · best for repeated stable prompts</span>
+        <span class="endpoint-label"><strong>Extended Cache · 1 hour</strong></span>
         <code class="endpoint" data-endpoint-path="/v2/chat/completions">/v2/chat/completions</code>
       </div>
     </div>
@@ -347,11 +349,6 @@
       <li>No prefills.</li>
       <li>Max context set to 0.</li>
     </ul>
-
-    <footer>
-      <span>Open source — verify exactly what runs.</span>
-      <a href="https://github.com/norenaboi/cache-proxy" target="_blank" rel="noreferrer">github.com/norenaboi/cache-proxy</a>
-    </footer>
   </main>
 
   <script>
@@ -375,6 +372,7 @@
         const stats = await response.json();
         document.getElementById("requests").textContent = integerFormat.format(stats.requests);
         document.getElementById("cacheReadRequests").textContent = integerFormat.format(stats.cache_read_requests);
+        document.getElementById("cachePercentage").textContent = `${((stats.cache_read_requests / stats.requests) * 100).toFixed(1)}%`;
         document.getElementById("cacheReadTokens").textContent = integerFormat.format(stats.cache_read_tokens);
         document.getElementById("savedDollars").textContent = dollarFormat.format(
           stats.cache_read_tokens * CACHE_SAVINGS_PER_MILLION_TOKENS / 1_000_000,
