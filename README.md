@@ -31,10 +31,12 @@ The default address is `http://127.0.0.1:8787`. Available settings:
 - `--stats-file`: persistent counter state file (default `stats.json`)
 - `--log-level`: Uvicorn log level (default `info`)
 
-Anthropic/OpenRouter supports at most four explicit cache breakpoints. Both chat routes use the same OpenAI-compatible request and response format and forward to OpenRouter:
+Anthropic supports at most four explicit cache breakpoints. All chat routes use the same OpenAI-compatible request and response format:
 
-- `POST /v1/chat/completions` adds the default five-minute marker, `cache_control: {"type": "ephemeral"}`.
-- `POST /v2/chat/completions` adds Anthropic's explicit one-hour marker, `cache_control: {"type": "ephemeral", "ttl": "1h"}`.
+- `POST /v1/chat/completions` forwards to OpenRouter with the default five-minute marker.
+- `POST /v2/chat/completions` forwards to OpenRouter with the explicit one-hour marker.
+- `POST /v3/chat/completions` forwards to NanoGPT with the default five-minute marker.
+- `POST /v4/chat/completions` forwards to NanoGPT with the explicit one-hour marker.
 
 Selected string messages are converted into text blocks; selected block-array messages receive the route's `cache_control` marker on their final block. The one-hour TTL does not require an Anthropic beta header. It has a higher cache-write price than the default TTL and generally needs at least three uses of an unchanged prompt prefix to be cost-effective. Prompts below the selected Claude model's minimum cacheable prefix are processed normally but are not cached.
 

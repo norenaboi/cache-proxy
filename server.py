@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+NANO_GPT_URL = "https://api.nano-gpt.com/api/v1/chat/completions"
 HOME_PAGE_PATH = Path(__file__).with_name("index.html")
 FAVICON_PATH = Path(__file__).with_name("favicon.ico")
 DEFAULT_CACHE_CONTROL = {"type": "ephemeral"}
@@ -328,6 +329,8 @@ def create_app(
 
     @app.post("/v1/chat/completions")
     @app.post("/v2/chat/completions")
+    @app.post("/v3/chat/completions")
+    @app.post("/v4/chat/completions")
     async def chat_completions(request: Request) -> Response:
         authorization = _validate_bearer(request.headers.get("authorization"))
         if authorization is None:
@@ -349,7 +352,10 @@ def create_app(
         if "messages" in outgoing:
             cache_control = (
                 ONE_HOUR_CACHE_CONTROL
-                if request.url.path == "/v2/chat/completions"
+                if request.url.path in {
+                    "/v2/chat/completions",
+                    "/v4/chat/completions",
+                }
                 else DEFAULT_CACHE_CONTROL
             )
             outgoing["messages"] = apply_prompt_caching(
@@ -360,20 +366,26 @@ def create_app(
             )
 
         headers = _upstream_headers(authorization, request.headers.get("accept"))
+        use_nano_gpt = request.url.path in {
+            "/v3/chat/completions",
+            "/v4/chat/completions",
+        }
+        upstream_url = NANO_GPT_URL if use_nano_gpt else OPENROUTER_URL
+        upstream_name = "NanoGPT" if use_nano_gpt else "OpenRouter"
         client: httpx.AsyncClient = request.app.state.client
         stats: Stats = request.app.state.stats
         stats.record_request()
 
         if body.get("stream") is True:
             upstream_request = client.build_request(
-                "POST", OPENROUTER_URL, headers=headers, json=outgoing
+                "POST", upstream_url, headers=headers, json=outgoing
             )
             try:
                 upstream = await client.send(upstream_request, stream=True)
             except httpx.TimeoutException:
-                return _gateway_error(504, "OpenRouter request timed out.")
+                return _gateway_error(504, f"{upstream_name} request timed out.")
             except httpx.RequestError:
-                return _gateway_error(502, "Unable to connect to OpenRouter.")
+                return _gateway_error(502, f"Unable to connect to {upstream_name}.")
 
             async def relay() -> AsyncIterator[bytes]:
                 buffer = b""
@@ -401,7 +413,7 @@ def create_app(
             )
 
         try:
-            upstream = await client.post(OPENROUTER_URL, headers=headers, json=outgoing)
+            upstream = await client.post(upstream_url, headers=headers, json=outgoing)
         except httpx.TimeoutException:
             return _gateway_error(504, "OpenRouter request timed out.")
         except httpx.RequestError:

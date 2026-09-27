@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A transparent OpenRouter proxy that adds prompt-caching breakpoints and forwards your request.">
-  <title>OpenRouter Cache Proxy</title>
+  <meta name="description" content="A transparent proxy that adds prompt-caching breakpoints and forwards your request.">
+  <title>Cache Proxy</title>
   <style>
     :root {
       color-scheme: dark;
@@ -103,7 +103,7 @@
     }
 
     main {
-      width: min(100%, 620px);
+      width: min(100%, 920px);
       padding: clamp(1.5rem, 4vw, 2.25rem);
       background: var(--surface);
       border: 1px solid var(--border);
@@ -178,8 +178,25 @@
 
     .endpoints {
       display: grid;
-      gap: .65rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
       margin-bottom: 1.1rem;
+    }
+
+    .endpoint-group {
+      display: grid;
+      gap: .65rem;
+      padding: 1rem;
+      background: rgb(255 255 255 / 1.5%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .endpoint-group h2 {
+      margin: 0;
+      font-size: .9rem;
+      font-weight: 750;
+      letter-spacing: .02em;
     }
 
     .endpoint-option {
@@ -269,6 +286,10 @@
       body { padding-top: 6.75rem; }
     }
 
+    @media (max-width: 42rem) {
+      .endpoints { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 27rem) {
       body { padding: 6.5rem .75rem .75rem; }
 
@@ -321,7 +342,7 @@
 
   <main>
     <div class="top">
-      <h1>OpenRouter Cache Proxy</h1>
+      <h1>Cache Proxy</h1>
       <a class="github-link" href="https://github.com/norenaboi/cache-proxy" target="_blank" rel="noreferrer">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 .7A11.5 11.5 0 0 0 8.36 23.1c.58.1.79-.25.79-.56v-2.23c-3.24.7-3.92-1.38-3.92-1.38-.53-1.35-1.3-1.7-1.3-1.7-1.06-.73.08-.72.08-.72 1.17.08 1.79 1.2 1.79 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.75.4-1.27.74-1.56-2.59-.3-5.31-1.3-5.31-5.69 0-1.26.45-2.28 1.2-3.09-.12-.29-.52-1.47.11-3.05 0 0 .98-.31 3.16 1.18a10.96 10.96 0 0 1 5.75 0c2.18-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.76.11 3.05.75.81 1.2 1.83 1.2 3.09 0 4.4-2.73 5.39-5.33 5.68.42.36.8 1.07.8 2.17v3.22c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
         Source
@@ -329,18 +350,32 @@
     </div>
 
     <p class="lede">
-      Point your OpenAI-compatible client at either endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys, nothing (except token count for stats). This is just a passthrough proxy.
+      Point your OpenAI-compatible client at an endpoint below. The proxy adds prompt-caching breakpoints to eligible messages, then forwards the request to OpenRouter or NanoGPT. <strong>That is the entire job</strong> — no prompt rewriting, no inspection for any other purpose, no stored request bodies or API keys, nothing (except token count for stats). This is just a passthrough proxy.
     </p>
 
     <div class="endpoints" aria-label="Chat completion endpoints">
-      <div class="endpoint-option">
-        <span class="endpoint-label"><strong>Default cache · 5 minutes</strong></span>
-        <code class="endpoint" data-endpoint-path="/v1/chat/completions">/v1/chat/completions</code>
-      </div>
-      <div class="endpoint-option">
-        <span class="endpoint-label"><strong>Extended Cache · 1 hour</strong></span>
-        <code class="endpoint" data-endpoint-path="/v2/chat/completions">/v2/chat/completions</code>
-      </div>
+      <section class="endpoint-group" aria-labelledby="openrouter-heading">
+        <h2 id="openrouter-heading">OpenRouter</h2>
+        <div class="endpoint-option">
+          <span class="endpoint-label"><strong>Default cache · 5 minutes</strong></span>
+          <code class="endpoint" data-endpoint-path="/v1/chat/completions">/v1/chat/completions</code>
+        </div>
+        <div class="endpoint-option">
+          <span class="endpoint-label"><strong>Extended cache · 1 hour</strong></span>
+          <code class="endpoint" data-endpoint-path="/v2/chat/completions">/v2/chat/completions</code>
+        </div>
+      </section>
+      <section class="endpoint-group" aria-labelledby="nanogpt-heading">
+        <h2 id="nanogpt-heading">NanoGPT</h2>
+        <div class="endpoint-option">
+          <span class="endpoint-label"><strong>Default cache · 5 minutes</strong></span>
+          <code class="endpoint" data-endpoint-path="/v3/chat/completions">/v3/chat/completions</code>
+        </div>
+        <div class="endpoint-option">
+          <span class="endpoint-label"><strong>Extended cache · 1 hour</strong></span>
+          <code class="endpoint" data-endpoint-path="/v4/chat/completions">/v4/chat/completions</code>
+        </div>
+      </section>
     </div>
 
     <p class="warning-heading">You need to keep the prompt stable, this means:</p>
